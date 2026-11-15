@@ -2,7 +2,7 @@
 """Live checks 2 and 3 of DESIGN.md §7.2: the idle veto, and keep-warm over two hours.
 
 Three throwaway sessions on a cheap model, each loaded with the plugin (--plugin-dir), started
-with CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS=100000, and filled with about 110K tokens by reading
+with CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS=100000, and filled with about 220K tokens by reading
 generated files that each hide a code word:
   A  armed, then its keep-warm task deleted: the guard alone must veto idle compaction
   B  not armed: the control, which idle compaction should compact at about 54 minutes
@@ -12,7 +12,12 @@ compaction). After 65 minutes A and B are checked and A is asked for a code word
 --wait minutes (default 125) C is checked and asked too. The machine must stay awake
 throughout: idle compaction gives up when its timer fires late.
 
-Usage: python3 -I tools/live-idle-check.py [--model haiku] [--wait 125]
+The model must be a full ID: with the alias `haiku`, idle compaction never runs, so the
+control can't compact (see tools/ptysession.py). The run stops at once when a prompt doesn't
+reach the transcript, a dialog covers the input box, or arming leaves no state; the first run
+(2026-11-15) went on for an hour after all three of its sessions sat behind a dialog.
+
+Usage: python3 -I tools/live-idle-check.py [--model claude-haiku-5-5] [--wait 125]
 Writes build/live-idle-<time>/result.json, updated as it goes.
 """
 import argparse
@@ -36,8 +41,12 @@ WORDS = ("amber basil cobalt dune ember fjord garnet harbor indigo juniper kestr
          "meadow nickel orchid pewter quartz russet saffron thistle umber velvet willow yarrow").split()
 
 
-def make_files(d, rng, count=8, lines=1000):
-    """Files of varied filler text, each hiding one code word on a known line."""
+def make_files(d, rng, count=8, lines=700):
+    """Files of varied filler text, each hiding one code word on a known line.
+
+    700 lines (about 24K tokens) fit in one Read call; at 1,000 the model reread each file
+    to get past Read's limit, which made the three sessions' sizes differ.
+    """
     secrets = {}
     for i in range(1, count + 1):
         word = rng.choice(WORDS) + "-" + str(rng.randint(100, 999))
@@ -91,13 +100,26 @@ class Probe:
         return sum(1 for r in self.rows() if r.get("type") == "assistant"
                    and '"text"' in json.dumps((r.get("message") or {}).get("content")))
 
+    def sent(self, key):
+        return sum(1 for r in self.rows() if r.get("type") == "user"
+                   and key in json.dumps((r.get("message") or {}).get("content"), ensure_ascii=False))
+
     def ask(self, text, timeout=300):
-        """Type a prompt and wait for the turn to settle: a new reply, then 20 quiet seconds."""
-        before = self.replies()
+        """Type a prompt and wait for the turn to settle: a new reply, then 20 quiet seconds.
+
+        Raises when the prompt never reaches the transcript or gets no reply, so a run can't
+        carry on as though a step had worked.
+        """
+        key = text.lstrip("/")[:40]
+        before, sent_before = self.replies(), self.sent(key)
         self.s.type_line(text)
         if self.transcript is None:
             self.transcript = ps.wait_for(lambda: ps.newest_transcript(self.dir, self.t0), 60)
-        ps.wait_for(lambda: self.replies() > before, timeout, every=2)
+        if not ps.wait_for(lambda: self.sent(key) > sent_before, 60, every=2):
+            raise RuntimeError("%s: %r never reached the transcript; the screen ends:\n%s"
+                               % (self.name, text[:60], self.s.text()[-1500:]))
+        if not ps.wait_for(lambda: self.replies() > before, timeout, every=2):
+            raise RuntimeError("%s: no reply to %r within %d s" % (self.name, text[:60], timeout))
         last = None
         for _ in range(int(timeout / 5)):
             n = len(self.rows())
@@ -116,7 +138,7 @@ class Probe:
 
 def main():
     ap = argparse.ArgumentParser(description="Live idle-veto and keep-warm checks.")
-    ap.add_argument("--model", default="haiku")
+    ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--wait", type=float, default=125, help="minutes to watch session C")
     args = ap.parse_args()
     root = REPO / "build" / time.strftime("live-idle-%Y%m%dT%H%M%S")
@@ -138,13 +160,23 @@ def main():
             p.ask("Read each of the files file1.txt to file8.txt in this folder in full with the "
                   "Read tool (one call per file, no offset or limit), then reply with only: done",
                   timeout=600)
-            note("%s: filled, context %d tokens, session %s" % (name, context_tokens(p.rows()), p.sid))
+            tokens = context_tokens(p.rows())
+            note("%s: filled, context %d tokens, session %s" % (name, tokens, p.sid))
+            if tokens < 120000:
+                raise RuntimeError("%s holds %d tokens, too few for idle compaction's 100K minimum"
+                                   % (name, tokens))
         for name in "AC":
             probes[name].ask("/no-autocompact:on")
-            note("%s: armed (state armed=%s)" % (name, (state_of(probes[name].sid) or {}).get("armed")))
+            armed = (state_of(probes[name].sid) or {}).get("armed")
+            note("%s: armed (state armed=%s)" % (name, armed))
+            if armed is not True:
+                raise RuntimeError("%s: /no-autocompact:on left no armed state" % name)
         probes["A"].ask("Call CronList, delete every task whose prompt starts with "
                         "'[no-autocompact keep-warm]' with CronDelete, then reply with only: deleted")
-        note("A: keep-warm deleted (CronDelete calls: %d)" % len(ps.tool_uses(probes["A"].rows(), "CronDelete")))
+        deleted = len(ps.tool_uses(probes["A"].rows(), "CronDelete"))
+        note("A: keep-warm deleted (CronDelete calls: %d)" % deleted)
+        if deleted < 1:
+            raise RuntimeError("A: the keep-warm task wasn't deleted")
         idle_from = time.time()
         res["idle_from"] = time.strftime("%H:%M:%S")
         note("all idle; nothing is typed from here")

@@ -38,6 +38,12 @@ up over the session don't return
 ([what survives compaction](https://code.claude.com/docs/en/context-window#what-survives-compaction)).
 After a long investigation, that working detail is often what you came back for.
 
+Idle compaction also runs while a session waits on its own work. A background command or subagent that is
+still running doesn't count as activity, since only Claude's requests reset the clock, so a
+session that started an hour-long job is summarized before the job reports back. Anthropic
+has said that's intended, because the cache would have expired by then anyway
+([anthropics/claude-code#106402](https://github.com/anthropics/claude-code/issues/106402)).
+
 Claude Code's own off switches are coarse:
 
 - `"idleCompaction": false`, or the `/config` row, applies to every session that reads that

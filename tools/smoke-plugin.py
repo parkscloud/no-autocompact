@@ -11,7 +11,7 @@ DESIGN.md §7.1 stage 3, with check 1 of §7.2. In a fresh directory under build
   4. runs /no-autocompact:status, then /no-autocompact:off, and checks the disarm and the
      CronDelete calls.
 It compares ~/.claude/settings.json before and after, and writes result.json beside the
-probe's screen log. Usage: python3 -I tools/smoke-plugin.py [--model haiku]
+probe's screen log. Usage: python3 -I tools/smoke-plugin.py [--model claude-haiku-5-5]
 """
 import argparse
 import importlib.util
@@ -41,7 +41,7 @@ def state_of(sid):
 
 def main():
     ap = argparse.ArgumentParser(description="Smoke-test the plugin in a throwaway session.")
-    ap.add_argument("--model", default="haiku")
+    ap.add_argument("--model", default="claude-haiku-5-5")
     args = ap.parse_args()
 
     probe = REPO / "build" / time.strftime("smoke-%Y%m%dT%H%M%S")

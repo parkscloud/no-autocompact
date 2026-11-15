@@ -12,7 +12,7 @@ What it does:
      logging hook and a settings file that wires it to UserPromptSubmit and
      UserPromptExpansion. The hook blocks any prompt containing the marker BLOCKME
      (except the typed set-up prompt, which mentions CronCreate).
-  2. Starts `claude` in a pseudo-terminal there (default model: haiku, to keep it cheap),
+  2. Starts `claude` in a pseudo-terminal there (default model: claude-haiku-5-5, to keep it cheap),
      accepts the folder-trust dialog, and asks it to schedule a once-a-minute task whose
      prompt carries the marker.
   3. Waits for the task to fire, then reports whether the hook saw the fired prompt and
@@ -21,7 +21,7 @@ What it does:
 The session is killed at the end; its scheduled task dies with it. Cost: a handful of
 small requests on the chosen model.
 
-Usage: python3 -I tools/probe-cron-hooks.py [--model haiku] [--wait 240] [--dir DIR]
+Usage: python3 -I tools/probe-cron-hooks.py [--model claude-haiku-5-5] [--wait 240] [--dir DIR]
 """
 import argparse
 import fcntl
@@ -127,7 +127,7 @@ def read_jsonl(path):
 
 def main():
     ap = argparse.ArgumentParser(description="Probe whether prompt hooks see scheduled-task prompts.")
-    ap.add_argument("--model", default="haiku")
+    ap.add_argument("--model", default="claude-haiku-5-5")
     ap.add_argument("--wait", type=int, default=240, help="seconds to wait for the task to fire")
     ap.add_argument("--dir", help="probe directory (default: build/probe-cron-<time> in the repo)")
     args = ap.parse_args()

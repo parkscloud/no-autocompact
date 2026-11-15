@@ -38,8 +38,9 @@ switch for this, `"idleCompaction": false`, applies to every session at once.
 Sources: the code inside the 2.1.325 native binary (searched with `tools/cc-context.py`;
 minified names change every release, so search by the strings listed in that script), the
 docs at `code.claude.com/docs/en/` (`settings-reference`, `prompt-caching`, `hooks`,
-`scheduled-tasks`, `skills`, `env-vars`, `costs`, `interactive-mode`), and the transcript of
-the session in §2.4.
+`scheduled-tasks`, `skills`, `env-vars`, `costs`, `interactive-mode`, `context-window`,
+`model-config`), public issues in `anthropics/claude-code` (cited by number), and the
+transcripts of the sessions in §2.4 and §2.6.
 
 ### 2.1 Three triggers
 
@@ -59,10 +60,26 @@ the session in §2.4.
 - **When it fires.** Last cache activity plus 0.9 of the TTL: 54 minutes.
 - **When it gives up.** Automatic or idle compaction is off (both settings are read at that
   moment); the timer fired more than 60 seconds late (the machine slept) or the cache isn't
-  warm; a newer request was made; the context is under max(100K, `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`
-  or 200K); the rate-limit status isn't `allowed`; the prompt prefix changed. In the terminal
-  it also refuses while a turn or a question is in progress, when another process holds the
-  session, when the transcript moved on, or when the user touched the session within the last 60 seconds.
+  warm; a newer main-thread request was made; the context is under max(100K,
+  `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` or 200K); the rate-limit status isn't `allowed`, which
+  includes the usage-pace warning (public issues #108789 and #109382 in anthropics/claude-code);
+  the prompt prefix changed. That last check always fails when the session's model is the
+  alias `haiku` or `opusplan`: Claude Code keeps no turn-end snapshot for those aliases, which
+  switch models in plan mode, so such a session never compacts while idle (#103243, and read
+  in 2.1.325). In the terminal it also refuses while a turn is in progress (an open question
+  to the user keeps one in progress) or a sign-in prompt is open, when another process holds
+  the session, when the transcript moved on, or when the user touched the session within the
+  last 60 seconds. It tries once per idle stretch (#103244).
+- **Background work doesn't count.** Only main-thread requests reset the timer, and none of
+  the checks above looks at running tasks. A session waiting on its own background command or
+  background subagent compacts like any other idle one (§2.6). The docs say such tasks keep
+  running through a compaction and that Claude is reminded of them afterwards. An Anthropic
+  collaborator called this intended in #106402: by the time a long task reports back, the
+  cache has expired anyway.
+- **Mode.** The server flag `tengu_sunny_locket` picks how it runs: `{"mode":"compact"}` on
+  the owner's machine (the terminal compacts in place before the cache expires), or
+  `compact_on_return` (in a VS Code report in #106402), where a summary written in the
+  background replaces the conversation at the next message.
 - **Result.** The terminal compacts in place and shows *Compacted while idle, before the
   prompt cache expired · turn off with "idleCompaction": false in settings.json*.
 - **History.** Added in the terminal in 2.1.299, a `/config` row in 2.1.302, the VS Code
@@ -138,6 +155,30 @@ a request every 30 minutes or a PreCompact veto would have kept the full context
   (untested). A warm cache never triggers it.
 - **`CLAUDE_CODE_LOOP_KEEPALIVE`** only restores self-paced `/loop`'s old 20-minute fallback
   wakeup; it doesn't keep the prompt cache alive.
+- **The autocompact offer** (seen on 2.1.325; not in the docs). When a turn ends with the
+  context above a size the server sets, on a model whose window exceeds the offered one,
+  Claude Code may open *We recommend compacting earlier*, offering to autocompact at 400K
+  tokens instead of the model's 1M. Confirming saves that window for the model in the user
+  settings, as `/autocompact` does; Esc records "not now" under `autoCompactOffer` in
+  `~/.claude.json`. It isn't shown while Remote Control is active, or when the window comes
+  from `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `--autocompact` or a settings file other than the
+  user's. A user who accepts gets threshold compactions at about 367K, which the guard leaves
+  alone (D3).
+- **A built-in keepalive** exists behind the server flag `tengu_sequential_cloud` (`false` on
+  the owner's machine): from 2.1.300 it touches the cache every 30 seconds for up to an hour
+  of inactivity, writing five-minute entries, and idle compaction then never arms (#102338,
+  #103483).
+
+### 2.6 A second case: compacted while its own background task ran (2026-11-15)
+
+This build session, on Claude Opus 5.5 in an interactive terminal. At 21:21:54Z it started
+`tools/live-idle-check.py` as a background command meant to run for 2¼ hours, and its last
+request went out at 21:27:17Z holding about 610K tokens. A recap followed at 21:30:33Z. Idle
+compaction started at 22:21:17Z, 54 minutes to the second after that request, and finished at
+22:23:28Z, taking the conversation from 611,719 tokens to 29,018 and keeping its last four
+messages verbatim. The background command ran on, and Claude Code's post-compaction reminder
+named it as still running. The plugin wasn't loaded in that session; armed, its guard would
+have vetoed the run and keep-warm would have held the cache until the task reported back.
 
 ## 3. Options and what they cost
 
@@ -366,6 +407,17 @@ the guard reads at most 256 KB of transcript.
   prompt hooks: rerun 2 and 3, and re-read the strings listed in `tools/cc-context.py`.
 - **Scripts**: `tools/smoke-plugin.py` covers check 1, and `tools/live-idle-check.py` covers
   checks 2 and 3 in one run of about 2¼ hours. Checks 4 and 5 have no script yet.
+- **First run of `tools/live-idle-check.py`** (2026-11-15, from 16:21 local): invalid, and
+  stopped after 80 minutes. Its sessions ran on the alias `haiku`, so the control could never
+  compact (§2.2). After their first turn each showed the autocompact offer (§2.5), which took
+  the keystrokes meant for `/no-autocompact:on`, so nothing was armed, and the harness carried
+  on regardless. `~/.claude/settings.json` was unchanged and the offer went unanswered;
+  `~/.claude.json` gained an eligibility record for Haiku 5.5. Fixed in the tools: full model
+  IDs, `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000` in every probe's environment so the offer
+  can't appear, `type_line()` refusing to type while a dialog is open, and the harness
+  stopping when a prompt doesn't reach the transcript or arming leaves no state. The smoke
+  test passed with those changes, and a second run started at 17:49 local
+  (`build/live-idle-20261115T174942/`).
 
 ### 7.3 Known gaps
 

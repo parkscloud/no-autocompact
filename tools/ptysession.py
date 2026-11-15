@@ -2,9 +2,14 @@
 
 Used by the scripts in tools/. A probe session shares the user's real ~/.claude and
 ~/.claude.json, so it must not change them: start() confirms only the folder-trust dialog
-and cancels any other dialog with Esc, and clean_env() keeps the user's preference
-variables (CLAUDE_CODE_NO_FLICKER and the like). Callers should still copy
-~/.claude/settings.json before a run and compare it afterwards (see AGENTS.md).
+and cancels any other dialog with Esc, type_line() refuses to type into a dialog that opens
+later, and clean_env() keeps the user's preference variables (CLAUDE_CODE_NO_FLICKER and
+the like). Callers should still copy ~/.claude/settings.json before a run and compare it
+afterwards (see AGENTS.md).
+
+Start probes with a full model ID such as claude-haiku-5-5, never the alias `haiku`: in
+Claude Code 2.1.325 a session whose model is the alias `haiku` or `opusplan` never runs idle
+compaction (its timer gives up as `prefix_changed`; anthropics/claude-code#103243).
 """
 import fcntl
 import json
@@ -28,9 +33,27 @@ SESSION_VARS = {"CLAUDECODE", "CLAUDE_PID", "CLAUDE_EFFORT", "CLAUDE_CODE_SESSIO
                 "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_EXECPATH", "CLAUDE_CODE_SESSION_KIND"}
 
 
+# Set for every probe unless the caller overrides it. Once a conversation passes a size the
+# server picks, Claude Code 2.1.325 may open "We recommend compacting earlier", which offers
+# to autocompact at 400K and saves the answer to the user's settings for that model. It isn't
+# offered when the window comes from this variable; 1M is Haiku 5.5's own window, so the
+# session compacts where it would anyway.
+QUIET_ENV = {"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000"}
+
+# Footers of dialogs that cover the input box, and of the input box itself. Whichever was
+# drawn last tells whether a dialog is open now.
+DIALOG_HINT = re.compile(r"[Ee]nter (to )?confirm|[Ee]sc not now|[Ee]sc to cancel|↑/↓ choose")
+INPUT_HINT = re.compile(r"shift\+tab to cycle|for shortcuts|esc to interrupt")
+
+
+class DialogOpen(RuntimeError):
+    """A dialog covers the input box, so typed text would go to it instead."""
+
+
 def clean_env(**extra):
     env = {k: v for k, v in os.environ.items() if k not in SESSION_VARS}
     env["TERM"] = "xterm-256color"
+    env.update(QUIET_ENV)
     env.update(extra)
     return env
 
@@ -70,9 +93,28 @@ class PtySession:
     def send(self, data):
         os.write(self.fd, data.encode() if isinstance(data, str) else data)
 
+    def dialog_open(self, tail=6000):
+        """True when a dialog's footer was drawn after the input box's last footer."""
+        screen = self.text()[-tail:]
+        dialog = [m.end() for m in DIALOG_HINT.finditer(screen)]
+        box = [m.end() for m in INPUT_HINT.finditer(screen)]
+        return bool(dialog) and (not box or dialog[-1] > box[-1])
+
+    def _refuse_if_dialog(self, text):
+        if self.dialog_open():
+            raise DialogOpen("a dialog is open, so %r wasn't sent; the screen ends:\n%s"
+                             % (text[:60], self.text()[-1500:]))
+
     def type_line(self, text):
+        """Type a prompt and press Enter, unless a dialog would catch the keys.
+
+        Text typed into a dialog is lost, and an Enter there could confirm a choice that
+        changes the user's settings, so this raises DialogOpen instead.
+        """
+        self._refuse_if_dialog(text)
         self.send(text)
         time.sleep(1.0)
+        self._refuse_if_dialog(text)  # one may have opened while typing: no Enter then
         self.send("\r")
 
     def kill(self):

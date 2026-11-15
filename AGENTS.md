@@ -15,12 +15,14 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
 
 ## Next steps (as of 2026-11-15, after v0.1.0)
 
-1. **A live run was started at 16:21 local on 2026-11-15** (`build/live-idle-20261115T162154/`): `tools/live-idle-check.py`,
-   covering `DESIGN.md` §7.2 checks 2 and 3 in three throwaway sessions (A guard only, B
-   unarmed control, C keep-warm). Its results, and an `events` timeline written as it goes,
-   are in `build/live-idle-<time>/result.json` (gitignored). If the machine slept during it,
-   idle compaction gives up and the run proves nothing: control B shows no compaction. In that
-   case, rerun it.
+1. **The second live run started at 17:49 local on 2026-11-15**
+   (`build/live-idle-20261115T174942/`): `tools/live-idle-check.py`, covering `DESIGN.md`
+   §7.2 checks 2 and 3 in three throwaway sessions (A guard only, B unarmed control, C
+   keep-warm). The first run (16:21) was invalid, for the two reasons in §7.2. Results, and an
+   `events` timeline written as it goes, are in `build/live-idle-<time>/result.json`
+   (gitignored). If control B shows no compaction, the run proves nothing: the machine slept,
+   or idle compaction gave up for a reason of its own (`DESIGN.md` §2.2, such as a usage-pace
+   warning). Rerun it then.
 2. **If it passes**: with the owner's OK, install from the marketplace at user scope
    (`/plugin marketplace add parkscloud/no-autocompact`, then
    `/plugin install no-autocompact@no-autocompact`) and confirm `/no-autocompact:on` works
@@ -74,6 +76,17 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
 - **The owner's machine has no tmux**; `tools/ptysession.py` drives sessions through a Python
   pseudo-terminal instead. Probe sessions run on Haiku to stay cheap, and they appear in the
   session list as `no-autocompact-*`.
+- **Probes name the model by its full ID** (`claude-haiku-5-5`). With the alias `haiku` (or
+  `opusplan`) idle compaction never runs, which voided the first live run.
+- **Dialogs can open mid-session**, not only at startup. The autocompact offer (*We recommend
+  compacting earlier*) took the first live run's keystrokes, and confirming it would have
+  saved a 400K window for Haiku 5.5 to the owner's user settings. `ptysession.clean_env()`
+  sets `CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000`, which suppresses the offer, and
+  `type_line()` raises rather than type into a dialog. Keep both.
+- **Background work doesn't hold off idle compaction.** A session over 200K tokens that waits
+  on its own background command or subagent still compacts 54 minutes after its last request
+  (`DESIGN.md` §2.2, §2.6). Before leaving a long background job running in a big session,
+  keep the session warm or accept the compaction.
 - **After a Claude Code update**, skim its changelog for idle compaction, PreCompact,
   UserPromptSubmit, Stop hooks and scheduled tasks (`CronCreate`). Rerun
   `tools/smoke-plugin.py`, and `tools/live-idle-check.py` when compaction changed. Also check
@@ -105,7 +118,7 @@ This repository pins `user.name`/`user.email` to the personal identity in its lo
 ```bash
 python3 -I -m unittest discover -s tests -v      # unit tests, a fraction of a second
 claude plugin validate .                         # manifests (one warning: no listing icon)
-python3 -I tools/smoke-plugin.py --model haiku   # live: about 3 minutes, a few cheap requests
+python3 -I tools/smoke-plugin.py                 # live: about 3 minutes on claude-haiku-5-5
 ```
 
 ## Project memory
