@@ -1,0 +1,15 @@
+{
+  "name": "no-autocompact",
+  "description": "The no-autocompact plugin for Claude Code: keep a chosen session from being compacted while you're away.",
+  "owner": {
+    "name": "Robert Parks"
+  },
+  "plugins": [
+    {
+      "name": "no-autocompact",
+      "source": "./",
+      "description": "Keep a chosen Claude Code session from being compacted while you're away.",
+      "version": "0.1.0"
+    }
+  ]
+}
