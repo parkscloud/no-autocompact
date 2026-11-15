@@ -5,9 +5,9 @@ later) and Codex alike; don't add a `CLAUDE.md` beside it, or Claude Code will i
 
 ## What this is
 
-`no-autocompact` is a public Claude Code plugin (MIT, `github.com/parkscloud/no-autocompact`)
-that keeps a chosen session from being compacted while its user is away, with the least model
-use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
+`no-autocompact` is a Claude Code plugin (MIT, `github.com/parkscloud/no-autocompact`, private
+until 1.0.0 by the owner's decision D9) that keeps a chosen session from being compacted while
+its user is away, with the least model use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
 UserPromptSubmit hook, with Stop and StopFailure for turn tracking, lets a 30-minute keep-warm
 schedule through only during absences. **Status: v0.1.0, released 2026-11-15; the long live
 checks in `DESIGN.md` §7.2 are still to run before 1.0.0.** The README is the public face and
@@ -23,13 +23,16 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
    (gitignored). If control B shows no compaction, the run proves nothing: the machine slept,
    or idle compaction gave up for a reason of its own (`DESIGN.md` §2.2, such as a usage-pace
    warning). Rerun it then.
-2. **If it passes**: with the owner's OK, install from the marketplace at user scope
-   (`/plugin marketplace add parkscloud/no-autocompact`, then
-   `/plugin install no-autocompact@no-autocompact`) and confirm `/no-autocompact:on` works
-   there; that copy's data directory differs from the `--plugin-dir` one. Then run §7.2
-   checks 4 (near-limit compaction in an armed session, with
-   `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`) and 5 (an interrupt, `/clear`), which no script
-   covers yet. When everything passes, release 1.0.0 (see Releases).
+2. **If it passes**: with the owner's OK, install at user scope. While the repository is
+   private, that means a local marketplace (`/plugin marketplace add <this repository's
+   folder>`, then `/plugin install no-autocompact@no-autocompact`); confirm
+   `/no-autocompact:on` works there (that copy's data directory differs from the
+   `--plugin-dir` one). Then run §7.2 checks 4 (near-limit compaction in an armed session,
+   with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`) and 5 (an interrupt, `/clear`), which no
+   script covers yet. When everything passes, make the repository public again
+   (`gh repo edit parkscloud/no-autocompact --visibility public
+   --accept-visibility-change-consequences`, run with `GH_TOKEN` set to the parkscloud token),
+   check the install from GitHub once, and release 1.0.0 (see Releases).
 3. **If it fails**: fix it, add a unit test that pins the failure, release 0.1.x and rerun.
 4. **After the install**, offer the owner a one-line pointer to the plugin in the global note
    "Claude Code — when a session compacts" (his dotfiles repo, `agents/AGENTS.md`). That file
@@ -96,8 +99,8 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
   can't stop (`DESIGN.md` §2.5, §7.3).
 - **Record what was verified and how** (code reading, docs or a live run) in `DESIGN.md` §2
   and §7.2.
-- **Public repository.** Keep personal paths, account details and private repo names out of
-  tracked files; this file holds the few pointers needed.
+- **Public again at 1.0.0** (D9). Keep personal paths, account details and private repo names
+  out of tracked files; this file holds the few pointers needed.
 - **Writing**: no strikethrough; mark superseded text in words. Plain, concrete wording.
 
 ## Releases
@@ -105,7 +108,8 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
 Bump these together, then tag: `.claude-plugin/plugin.json` `version`, its entry in
 `.claude-plugin/marketplace.json`, a `CHANGELOG.md` section, the README's status line, and an
 annotated tag `vX.Y.Z` on the released commit. 0.x until every check in `DESIGN.md` §7.2 has
-passed on an install from the marketplace; then 1.0.0.
+passed on an install from the marketplace; then 1.0.0, released after the repository is
+public again.
 
 Pushing: the remote is HTTPS under the owner's personal account `parkscloud`, with no git
 credential helper. When the active `gh` account isn't `parkscloud`, push with

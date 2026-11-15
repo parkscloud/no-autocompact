@@ -232,16 +232,17 @@ once answered.
 | D1 | Name | `no-autocompact`: repo, plugin and skill. **The command form is AMENDED by D7**: as a plugin's skills it becomes `/no-autocompact:on`, `:off` and `:status`, not `/no-autocompact`. | Given: the project folder and the session that started it carry this name; lowercase-kebab like the owner's other skill repos. 2026-11-15. |
 | D2 | Mechanism | **The cap described here is SUPERSEDED by D6 (no cap); the rest stands.** **Guard plus capped keep-warm.** A PreCompact hook vetoes the idle compaction of an armed session at no token cost, and a short session-scoped turn every 30 minutes keeps the prompt cache warm until those turns have cost about one cold return; after that the guard works alone. | Fewest billed tokens for any absence under about 17 hours at 425K, and within about twice the minimum for longer ones (§3); a warm, fast first reply on return; the hook catches what the turns can miss (a failed turn, the cap, a schedule that stops). The owner accepted the costs: two short turns an hour while away, and more to build and test than the guard alone. Decided 2026-11-15. |
 | D3 | What the guard vetoes | **Idle runs only.** The guard blocks an automatic compaction of an armed session only when the transcript's newest entry is more than about ten minutes old. Compaction near the context limit, after a too-long error and by hand (`/compact`) always runs. | The near-limit and too-long paths exist to keep a full session working; vetoing them would run the session into the hard limit mid-task, and Claude Code's `autoCompactEnabled: false` already offers that for anyone who wants it. Decided 2026-11-15. |
-| D4 | Visibility | **A public GitHub repository.** The README explains the purpose to the public: that the project exists for Claude Code, following the idle compaction introduced in 2.1.299 and widened in 2.1.302, 2.1.314 and 2.1.318 (re-checked against the live changelog and docs). | The owner's instruction. The license is still open (§5). Decided 2026-11-15. |
+| D4 | Visibility | **The timing is AMENDED by D9**: private until 1.0.0. **A public GitHub repository.** The README explains the purpose to the public: that the project exists for Claude Code, following the idle compaction introduced in 2.1.299 and widened in 2.1.302, 2.1.314 and 2.1.318 (re-checked against the live changelog and docs). | The owner's instruction. The license is still open (§5). Decided 2026-11-15. |
 | D5 | How long arming lasts | **The whole session, with keep-warm automatic across absences.** Once armed, the guard stays on until `/no-autocompact off` or the session ends. One recurring 30-minute schedule serves the whole session: a hook lets a tick through only after 20 or more idle minutes while the cache is still warm, and skips it at no token cost otherwise. | Arm once and every absence is covered, including ones you don't announce. The owner accepted the costs: a one-line notice every 30 minutes while working (each skipped tick prints one), and the schedule's seven-day expiry, after which the guard holds alone. Decided 2026-11-15. |
 | D6 | Keep-warm cap | **No cap.** Within an absence, ticks keep the cache warm for as long as the absence lasts, until the schedule's seven-day expiry. Ticks still skip, at no cost, whenever the cache has already gone cold (after the machine slept, say), since warming it again then costs a full re-read that the first message back would pay anyway. | The owner preferred a warm return over the cost bound: about $0.20 an hour at 425K, which passes the price of one full re-read after about 17 hours (a week away comes to about $34). Supersedes the cap in D2. Decided 2026-11-15. |
 | D7 | Packaging | **A Claude Code plugin with its own marketplace**, as okf-author does: `/plugin marketplace add parkscloud/no-autocompact`, then `/plugin install no-autocompact@no-autocompact`. The skills and hooks ship, update (auto-update is opt-in) and uninstall together, and nothing edits the user's `settings.json`. Commands: `/no-autocompact:on`, `/no-autocompact:off`, `/no-autocompact:status`, and plain words for arming. | One install carries every part, and a plugin is Claude Code's only native way to update a skill. The cost is the namespaced command form (amends D1). Decided 2026-11-15. |
 | D8 | License | **MIT**, as okf-author uses; `LICENSE` holds the standard text. | Short and the most common license for a small developer tool; the repository holds only the owner's own code. Decided 2026-11-15. |
+| D9 | When it's public | **Private until 1.0.0.** The repository, public since v0.1.0, went private on the evening of 2026-11-15 and goes public again only once every check in §7.2 passes and 1.0.0 is released. Tags and the v0.1.0 release stay. | The owner doesn't want it public unless it works, and the idle veto and keep-warm weren't yet proven live. Nobody had starred, forked, viewed or cloned it. Amends D4's timing. Decided 2026-11-15. |
 
 ## 5. Open decisions
 
-None. D1 to D8 settle every question raised so far. The design in §6 follows from them and
-waits for the owner's sign-off.
+None. D1 to D9 settle every question raised so far. The owner signed off on the design in §6
+on 2026-11-15.
 
 ## 6. Design
 
@@ -444,4 +445,7 @@ the guard reads at most 256 KB of transcript.
 After that, each user-facing change gets a semantic version bump, a `CHANGELOG.md` entry and
 an annotated git tag. The version lives in `.claude-plugin/plugin.json`, in its entry in
 `.claude-plugin/marketplace.json` and in the README's status line; all three move together
-with the tag. v0.1.0 was released on 2026-11-15.
+with the tag. v0.1.0 was released on 2026-11-15, and the repository went private that evening
+(D9). Until it's public again, the install check runs from a local marketplace (this
+repository's folder), which reads the same manifests; once it's public, the install from
+GitHub is checked once more before 1.0.0.
