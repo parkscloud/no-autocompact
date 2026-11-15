@@ -13,6 +13,26 @@ schedule through only during absences. **Status: v0.1.0, released 2026-11-15; th
 checks in `DESIGN.md` §7.2 are still to run before 1.0.0.** The README is the public face and
 explains that the project exists because of the idle compaction Claude Code 2.1.299 added.
 
+## Next steps (as of 2026-11-15, after v0.1.0)
+
+1. **A live run was started at 16:21 local on 2026-11-15** (`build/live-idle-20261115T162154/`): `tools/live-idle-check.py`,
+   covering `DESIGN.md` §7.2 checks 2 and 3 in three throwaway sessions (A guard only, B
+   unarmed control, C keep-warm). Its results, and an `events` timeline written as it goes,
+   are in `build/live-idle-<time>/result.json` (gitignored). If the machine slept during it,
+   idle compaction gives up and the run proves nothing: control B shows no compaction. In that
+   case, rerun it.
+2. **If it passes**: with the owner's OK, install from the marketplace at user scope
+   (`/plugin marketplace add parkscloud/no-autocompact`, then
+   `/plugin install no-autocompact@no-autocompact`) and confirm `/no-autocompact:on` works
+   there; that copy's data directory differs from the `--plugin-dir` one. Then run §7.2
+   checks 4 (near-limit compaction in an armed session, with
+   `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`) and 5 (an interrupt, `/clear`), which no script
+   covers yet. When everything passes, release 1.0.0 (see Releases).
+3. **If it fails**: fix it, add a unit test that pins the failure, release 0.1.x and rerun.
+4. **After the install**, offer the owner a one-line pointer to the plugin in the global note
+   "Claude Code — when a session compacts" (his dotfiles repo, `agents/AGENTS.md`). That file
+   sits near its 30,000-byte budget, and the owner commits the dotfiles repo himself.
+
 ## Layout and source of truth
 
 - `DESIGN.md`: the specification. Verified background (§2), cost model (§3), decisions D1 to D8
@@ -22,7 +42,8 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
   shell gate in front of every hook, so sessions never armed don't start Python.
 - `skills/{on,off,status}/SKILL.md`, `hooks/hooks.json`, `.claude-plugin/{plugin,marketplace}.json`.
 - `tests/test_nac.py`: unit tests. `tools/`: `cc-context.py` (search the Claude Code binary),
-  `ptysession.py` (drive a throwaway session), `smoke-plugin.py`, `probe-cron-hooks.py`.
+  `ptysession.py` (drive a throwaway session), `smoke-plugin.py` (about 3 minutes),
+  `live-idle-check.py` (about 2¼ hours), `probe-cron-hooks.py` (the original hook probe).
 
 ## Working rules
 
@@ -42,6 +63,24 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
   `~/.claude/settings.json` before and after. On 2026-11-15 an early probe's stray Enter
   accepted the fullscreen-renderer offer and wrote `"tui": "fullscreen"` there, which had to be
   removed by hand.
+- **One copy of the plugin at a time.** Don't run the live tools while the marketplace copy
+  is enabled: its hooks load beside the `--plugin-dir` copy, don't know that copy armed the
+  session, and skip its ticks as "not armed". Disable the installed plugin first and enable it
+  again afterwards.
+- **A skill's `!` line must match its `allowed-tools` rule.** Outside auto mode, Claude Code
+  aborts a skill whose injected command the permission rules don't allow, so each SKILL.md
+  pre-approves `Bash(python3 -I ${CLAUDE_PLUGIN_ROOT}/scripts/nac.py *)`. Keep the `!`
+  commands unquoted and starting with exactly that prefix, or the rule stops matching.
+- **The owner's machine has no tmux**; `tools/ptysession.py` drives sessions through a Python
+  pseudo-terminal instead. Probe sessions run on Haiku to stay cheap, and they appear in the
+  session list as `no-autocompact-*`.
+- **After a Claude Code update**, skim its changelog for idle compaction, PreCompact,
+  UserPromptSubmit, Stop hooks and scheduled tasks (`CronCreate`). Rerun
+  `tools/smoke-plugin.py`, and `tools/live-idle-check.py` when compaction changed. Also check
+  the cached server flag `tengu_jiggly_blossom` in `~/.claude.json` (under
+  `cachedGrowthBookFeatures`): `off` on 2026-11-15. If it turns `on`, Claude Code starts
+  clearing old tool results when a session returns after its cache went cold, which the guard
+  can't stop (`DESIGN.md` §2.5, §7.3).
 - **Record what was verified and how** (code reading, docs or a live run) in `DESIGN.md` §2
   and §7.2.
 - **Public repository.** Keep personal paths, account details and private repo names out of

@@ -364,6 +364,27 @@ the guard reads at most 256 KB of transcript.
   5. Turn tracking after an interrupt, and the leftover-schedule path after `/clear`.
 - **After each Claude Code update** whose changelog touches compaction, scheduled tasks or
   prompt hooks: rerun 2 and 3, and re-read the strings listed in `tools/cc-context.py`.
+- **Scripts**: `tools/smoke-plugin.py` covers check 1, and `tools/live-idle-check.py` covers
+  checks 2 and 3 in one run of about 2¼ hours. Checks 4 and 5 have no script yet.
+
+### 7.3 Known gaps
+
+- **The VS Code panel and the desktop app's Code tab** write the idle summary while the user is
+  away and swap it in at the next message (2.1.314). The code suggests that path also consults
+  the PreCompact hooks, since a background summary runs them with the trigger `auto` (§2.3),
+  but it hasn't been traced, and nothing here has been run there.
+- **Windows** is untested: the gate needs `bash`, and `nac.py` skips file locking without
+  `fcntl`.
+- **Tool-result clearing after idle** (the server flag `tengu_jiggly_blossom`, §2.5) isn't a
+  compaction, so the guard can't stop it. Keep-warm avoids it, since the cache never goes cold
+  while the ticks run.
+- **Anthropic's plugin directory** would need a square icon of 512 to 2048 pixels
+  (`claude plugin validate` warns that none exists). Not needed for the self-hosted
+  marketplace.
+- **A typed prompt that starts with the marker** `[no-autocompact keep-warm]` is treated as a
+  tick.
+- **Two copies of the plugin** (an installed one and a `--plugin-dir` one) don't share state,
+  so the installed copy skips the other's ticks; this matters only to development.
 
 ## 8. Versioning
 
