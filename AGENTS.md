@@ -5,16 +5,16 @@ later) and Codex alike; don't add a `CLAUDE.md` beside it, or Claude Code will i
 
 ## What this is
 
-`no-autocompact` is a Claude Code plugin (MIT, `github.com/parkscloud/no-autocompact`, private
-until 1.0.0 by the owner's decision D9) that keeps a chosen session from being compacted while
-its user is away, with the least model use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
+`no-autocompact` is a public Claude Code plugin (MIT, `github.com/parkscloud/no-autocompact`)
+that keeps a chosen session from being compacted while its user is away, with the least model
+use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
 UserPromptSubmit hook, with Stop and StopFailure for turn tracking, lets a 30-minute keep-warm
-schedule through only during absences. **Status: v0.1.1, 2026-11-15; every live check in
-`DESIGN.md` §7.2 passed that evening in throwaway sessions, and the install check remains
-before 1.0.0.** The README is the public face and
-explains that the project exists because of the idle compaction Claude Code 2.1.299 added.
+schedule through only during absences. **Status: v1.0.0, released 2026-11-15 after every live
+check in `DESIGN.md` §7.2 passed; the owner's Claude Code has it installed from the GitHub
+marketplace.** The README is the public face and explains that the project exists because
+of the idle compaction Claude Code 2.1.299 added.
 
-## Next steps (as of 2026-11-15, after v0.1.1)
+## State and next steps (as of 2026-11-15, v1.0.0)
 
 1. **Done: `DESIGN.md` §7.2 checks 2 and 3 passed** in the second live run, 17:49 to 19:59
    local on 2026-11-15 (`build/live-idle-20261115T174942/result.json`, gitignored): the
@@ -25,21 +25,19 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
    The run also found the auto-mode classifier refusing a hook-requested `CronCreate`; D10
    (0.1.1) made upkeep a one-line reminder instead, and the smoke test now covers it.
 2. **Done: checks 4 and 5** (`tools/check-edges.py`, 2026-11-15), in throwaway sessions.
-3. **Next, with the owner's OK: the install check.** While the repository is private, install
-   at user scope from a local marketplace (`claude plugin marketplace add <this repository's
-   folder>`, then `claude plugin install no-autocompact@no-autocompact`) and confirm
-   `/no-autocompact:on` works in a fresh session (that copy's data directory differs from the
-   `--plugin-dir` one). Then make the repository public again (`gh repo edit
-   parkscloud/no-autocompact --visibility public --accept-visibility-change-consequences`,
-   run with `GH_TOKEN` set to the parkscloud token), check the install from GitHub once, and
-   release 1.0.0 (see Releases). Disable the installed copy before running the live tools
-   again (one copy at a time, below).
-4. **If a check fails**: fix it, add a unit test that pins the failure, release 0.1.x and
-   rerun.
-5. **After the install**, the global note "Claude Code — when a session compacts" (the
-   owner's dotfiles repo, `agents/AGENTS.md`) has no room for a pointer: it sits at 29,997 of
-   its 30,000 bytes. `agents/claude-code-compaction.md` there already describes the plugin;
-   update its status line when 1.0.0 ships. The owner commits the dotfiles repo himself.
+3. **Done: the install check, then 1.0.0** (2026-11-15). Installed at user scope from this
+   folder as a marketplace, then from GitHub once the repository was public again; the smoke
+   test passed on both (`tools/smoke-plugin.py --installed`). The owner's install now comes
+   from the GitHub marketplace. Before running the live tools with `--plugin-dir`, disable it
+   (`claude plugin disable no-autocompact@no-autocompact`) and enable it again afterwards
+   (one copy at a time, below).
+4. **If a check fails**: fix it, add a unit test that pins the failure, release a patch
+   version and rerun. Nothing else is scheduled; after a Claude Code update, follow the
+   update rule under Working rules.
+5. **Dotfiles.** The global note "Claude Code — when a session compacts" (the owner's
+   dotfiles repo, `agents/AGENTS.md`) has no room for a pointer: it sits at 29,997 of its
+   30,000 bytes. `agents/claude-code-compaction.md` there describes the plugin, updated for
+   1.0.0 on 2026-11-15. The owner commits the dotfiles repo himself.
 
 ## Layout and source of truth
 
@@ -103,17 +101,19 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
   can't stop (`DESIGN.md` §2.5, §7.3).
 - **Record what was verified and how** (code reading, docs or a live run) in `DESIGN.md` §2
   and §7.2.
-- **Public again at 1.0.0** (D9). Keep personal paths, account details and private repo names
-  out of tracked files; this file holds the few pointers needed.
+- **Public repository.** Keep personal paths, account details and private repo names out of
+  tracked files; this file holds the few pointers needed.
 - **Writing**: no strikethrough; mark superseded text in words. Plain, concrete wording.
 
 ## Releases
 
 Bump these together, then tag: `.claude-plugin/plugin.json` `version`, its entry in
 `.claude-plugin/marketplace.json`, a `CHANGELOG.md` section, the README's status line, and an
-annotated tag `vX.Y.Z` on the released commit. 0.x until every check in `DESIGN.md` §7.2 has
-passed on an install from the marketplace; then 1.0.0, released after the repository is
-public again.
+annotated tag `vX.Y.Z` on the released commit, and a GitHub release. 1.0.0 shipped on
+2026-11-15, once every check in `DESIGN.md` §7.2 had passed on an install from the
+marketplace; since then each user-facing change gets a semantic version bump. After a
+release, update the owner's copy: `claude plugin marketplace update no-autocompact`, then
+`claude plugin update no-autocompact@no-autocompact` (sessions pick it up on restart).
 
 Pushing: the remote is HTTPS under the owner's personal account `parkscloud`, with no git
 credential helper. When the active `gh` account isn't `parkscloud`, push with

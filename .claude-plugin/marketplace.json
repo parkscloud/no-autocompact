@@ -9,7 +9,7 @@
       "name": "no-autocompact",
       "source": "./",
       "description": "Keep a chosen Claude Code session from being compacted while you're away.",
-      "version": "0.1.1"
+      "version": "1.0.0"
     }
   ]
 }

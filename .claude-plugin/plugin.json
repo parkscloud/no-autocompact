@@ -1,6 +1,6 @@
 {
   "name": "no-autocompact",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "description": "Keeps the Claude Code session you choose from being compacted while you're away: a PreCompact hook vetoes idle compaction at no token cost, and a 30-minute keep-warm schedule holds the prompt cache during absences.",
   "author": {
     "name": "Robert Parks",

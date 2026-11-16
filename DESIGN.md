@@ -1,8 +1,7 @@
 # no-autocompact — Design Specification
 
-**Status: v0.1.1, 2026-11-15. Every live check in §7.2 passed that evening in throwaway
-sessions; the install check remains before 1.0.0.** The design was
-approved by the owner on 2026-11-15. The background in §2 was checked against Claude Code
+**Status: v1.0.0, 2026-11-15. Every live check in §7.2 passed, in throwaway sessions and on
+installs from the marketplace.** The design was approved by the owner on 2026-11-15. The background in §2 was checked against Claude Code
 2.1.325's code and docs, with live probes. Decisions D1 to D10, taken with the owner one at a
 time, are in §4; the design in §6 follows from them.
 
@@ -238,7 +237,7 @@ once answered.
 | D6 | Keep-warm cap | **No cap.** Within an absence, ticks keep the cache warm for as long as the absence lasts, until the schedule's seven-day expiry. Ticks still skip, at no cost, whenever the cache has already gone cold (after the machine slept, say), since warming it again then costs a full re-read that the first message back would pay anyway. | The owner preferred a warm return over the cost bound: about $0.20 an hour at 425K, which passes the price of one full re-read after about 17 hours (a week away comes to about $34). Supersedes the cap in D2. Decided 2026-11-15. |
 | D7 | Packaging | **A Claude Code plugin with its own marketplace**, as okf-author does: `/plugin marketplace add parkscloud/no-autocompact`, then `/plugin install no-autocompact@no-autocompact`. The skills and hooks ship, update (auto-update is opt-in) and uninstall together, and nothing edits the user's `settings.json`. Commands: `/no-autocompact:on`, `/no-autocompact:off`, `/no-autocompact:status`, and plain words for arming. | One install carries every part, and a plugin is Claude Code's only native way to update a skill. The cost is the namespaced command form (amends D1). Decided 2026-11-15. |
 | D8 | License | **MIT**, as okf-author uses; `LICENSE` holds the standard text. | Short and the most common license for a small developer tool; the repository holds only the owner's own code. Decided 2026-11-15. |
-| D9 | When it's public | **Private until 1.0.0.** The repository, public since v0.1.0, went private on the evening of 2026-11-15 and goes public again only once every check in §7.2 passes and 1.0.0 is released. Tags and the v0.1.0 release stay. | The owner doesn't want it public unless it works, and the idle veto and keep-warm weren't yet proven live. Nobody had starred, forked, viewed or cloned it. Amends D4's timing. Decided 2026-11-15. |
+| D9 | When it's public | **Private until 1.0.0.** The repository, public since v0.1.0, went private on the evening of 2026-11-15 and goes public again only once every check in §7.2 passes and 1.0.0 is released. Tags and the v0.1.0 release stay. | The owner doesn't want it public unless it works, and the idle veto and keep-warm weren't yet proven live. Nobody had starred, forked, viewed or cloned it. Amends D4's timing. Decided 2026-11-15. **Done the same night: public again with 1.0.0.** |
 | D10 | How upkeep works | **Remind, don't act.** When an armed session's keep-warm schedule has stopped (seven days old, or no tick when one was due), the hook marks it stopped and has Claude tell the user, in one line and at most once a day, that `/no-autocompact:on` restarts it. Claude calls no tool in that turn; the guard keeps vetoing meanwhile. The same holds for a leftover schedule firing in a session that isn't armed: Claude points to `/no-autocompact:off`, once. | In the live run of 2026-11-15 the auto-mode classifier refused the `CronCreate` the hook had asked for inside an unrelated turn, and the default mode would have shown a permission prompt there instead. The commands' skills pre-approve the scheduling tools, so running one always works. A stopped schedule costs only the warm cache, and rarely: weekly at most. Owner's choice for stopped schedules; the leftover case follows the same rule. Decided 2026-11-15. |
 
 ## 5. Open decisions
@@ -460,6 +459,13 @@ the guard reads at most 256 KB of transcript.
   - `~/.claude/settings.json` was unchanged. The first attempt that evening failed on two
     script bugs (the bare `sleep`, and replies counted in the transcript from before
     `/clear`), fixed before this run.
+- **Done, live: the install check** (2026-11-15). Installed at user scope from this
+  repository's folder as a marketplace, then, once the repository was public again, from
+  GitHub (`claude plugin marketplace add parkscloud/no-autocompact`, then `claude plugin
+  install no-autocompact@no-autocompact`). Each install added only its plugin and marketplace
+  entries to `~/.claude/settings.json`, and `tools/smoke-plugin.py --installed` passed on
+  both, with the state under `~/.claude/plugins/data/no-autocompact-no-autocompact/`.
+  Removing the folder marketplace uninstalled the plugin and deleted its data.
 
 ### 7.3 Known gaps
 
@@ -482,11 +488,11 @@ the guard reads at most 256 KB of transcript.
 
 ## 8. Versioning
 
-0.x until every live check in §7.2 passes on an install from the marketplace, then 1.0.0.
+0.x until every live check in §7.2 passed on an install from the marketplace, then 1.0.0.
 After that, each user-facing change gets a semantic version bump, a `CHANGELOG.md` entry and
 an annotated git tag. The version lives in `.claude-plugin/plugin.json`, in its entry in
 `.claude-plugin/marketplace.json` and in the README's status line; all three move together
-with the tag. v0.1.0 was released on 2026-11-15, and the repository went private that evening
-(D9); v0.1.1 followed the same evening (D10). Until it's public again, the install check runs from a local marketplace (this
-repository's folder), which reads the same manifests; once it's public, the install from
-GitHub is checked once more before 1.0.0.
+with the tag. On 2026-11-15 v0.1.0 was released, the repository went private that evening
+(D9) and v0.1.1 followed (D10). Once every check had passed, including installs from a local
+marketplace and from GitHub, the repository went public again and v1.0.0 was released that
+night.

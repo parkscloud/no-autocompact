@@ -3,6 +3,20 @@
 All notable changes to no-autocompact are recorded here. Versions follow semantic
 versioning; 0.x releases come before the live checks in DESIGN.md §7.2 have all passed.
 
+## 1.0.0 (2026-11-15)
+
+First stable release; the plugin behaves as in 0.1.1. Every live check in DESIGN.md §7.2
+passed on Claude Code 2.1.325:
+- the guard vetoed idle compaction, and the session kept its context;
+- keep-warm held the cache for two hours, with no compaction;
+- compaction near the context limit still ran in an armed session;
+- an interrupt left the turn open until the next one ended, and after `/clear` a leftover
+  schedule was skipped, mentioned once and removed by `/no-autocompact:off`;
+- installs from this marketplace, from a local folder and from GitHub, passed the smoke test.
+
+Tools: `tools/check-edges.py` runs checks 4 and 5, and `tools/smoke-plugin.py --installed`
+tests the installed copy.
+
 ## 0.1.1 (2026-11-15)
 
 - When an armed session's keep-warm schedule has stopped (Claude Code ends it after seven

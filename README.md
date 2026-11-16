@@ -3,10 +3,12 @@
 A Claude Code plugin that keeps the session you choose from being compacted while you're
 away, using as little model time as possible.
 
-**Status: v0.1.1, an early release (November 2026).** In live Claude Code 2.1.325 sessions
-the guard vetoed idle compaction and the session kept its context, and keep-warm held the
-cache for two hours with no compaction. It also passes its unit tests and a smoke test. The
-checks still to run before 1.0.0 are listed in [DESIGN.md §7.2](DESIGN.md#72-checks).
+**Status: v1.0.0 (November 2026).** Checked live in Claude Code 2.1.325: the guard vetoed
+idle compaction and the session kept its context; keep-warm held the cache for two hours with
+no compaction; compaction near the context limit, interrupts and `/clear` behave as designed;
+and an install from this marketplace passes the smoke test. The checks are listed in
+[DESIGN.md §7.2](DESIGN.md#72-checks) and are rerun after Claude Code releases that touch
+compaction.
 
 ## Why this exists
 
