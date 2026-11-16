@@ -9,8 +9,8 @@ later) and Codex alike; don't add a `CLAUDE.md` beside it, or Claude Code will i
 until 1.0.0 by the owner's decision D9) that keeps a chosen session from being compacted while
 its user is away, with the least model use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
 UserPromptSubmit hook, with Stop and StopFailure for turn tracking, lets a 30-minute keep-warm
-schedule through only during absences. **Status: v0.1.1, 2026-11-15; live checks 2 and 3 in
-`DESIGN.md` §7.2 passed that evening, while checks 4 and 5 and the install check remain
+schedule through only during absences. **Status: v0.1.1, 2026-11-15; every live check in
+`DESIGN.md` §7.2 passed that evening in throwaway sessions, and the install check remains
 before 1.0.0.** The README is the public face and
 explains that the project exists because of the idle compaction Claude Code 2.1.299 added.
 
@@ -24,20 +24,22 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
    for a reason of its own, `DESIGN.md` §2.2).
    The run also found the auto-mode classifier refusing a hook-requested `CronCreate`; D10
    (0.1.1) made upkeep a one-line reminder instead, and the smoke test now covers it.
-2. **If it passes**: with the owner's OK, install at user scope. While the repository is
-   private, that means a local marketplace (`/plugin marketplace add <this repository's
-   folder>`, then `/plugin install no-autocompact@no-autocompact`); confirm
-   `/no-autocompact:on` works there (that copy's data directory differs from the
-   `--plugin-dir` one). Then run §7.2 checks 4 (near-limit compaction in an armed session,
-   with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`) and 5 (an interrupt, `/clear`), which no
-   script covers yet. When everything passes, make the repository public again
-   (`gh repo edit parkscloud/no-autocompact --visibility public
-   --accept-visibility-change-consequences`, run with `GH_TOKEN` set to the parkscloud token),
-   check the install from GitHub once, and release 1.0.0 (see Releases).
-3. **If it fails**: fix it, add a unit test that pins the failure, release 0.1.x and rerun.
-4. **After the install**, offer the owner a one-line pointer to the plugin in the global note
-   "Claude Code — when a session compacts" (his dotfiles repo, `agents/AGENTS.md`). That file
-   sits near its 30,000-byte budget, and the owner commits the dotfiles repo himself.
+2. **Done: checks 4 and 5** (`tools/check-edges.py`, 2026-11-15), in throwaway sessions.
+3. **Next, with the owner's OK: the install check.** While the repository is private, install
+   at user scope from a local marketplace (`claude plugin marketplace add <this repository's
+   folder>`, then `claude plugin install no-autocompact@no-autocompact`) and confirm
+   `/no-autocompact:on` works in a fresh session (that copy's data directory differs from the
+   `--plugin-dir` one). Then make the repository public again (`gh repo edit
+   parkscloud/no-autocompact --visibility public --accept-visibility-change-consequences`,
+   run with `GH_TOKEN` set to the parkscloud token), check the install from GitHub once, and
+   release 1.0.0 (see Releases). Disable the installed copy before running the live tools
+   again (one copy at a time, below).
+4. **If a check fails**: fix it, add a unit test that pins the failure, release 0.1.x and
+   rerun.
+5. **After the install**, the global note "Claude Code — when a session compacts" (the
+   owner's dotfiles repo, `agents/AGENTS.md`) has no room for a pointer: it sits at 29,997 of
+   its 30,000 bytes. `agents/claude-code-compaction.md` there already describes the plugin;
+   update its status line when 1.0.0 ships. The owner commits the dotfiles repo himself.
 
 ## Layout and source of truth
 
@@ -49,7 +51,8 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
 - `skills/{on,off,status}/SKILL.md`, `hooks/hooks.json`, `.claude-plugin/{plugin,marketplace}.json`.
 - `tests/test_nac.py`: unit tests. `tools/`: `cc-context.py` (search the Claude Code binary),
   `ptysession.py` (drive a throwaway session), `smoke-plugin.py` (about 3 minutes),
-  `live-idle-check.py` (about 2¼ hours), `probe-cron-hooks.py` (the original hook probe).
+  `live-idle-check.py` (about 2¼ hours), `check-edges.py` (checks 4 and 5, about 10 minutes),
+  `probe-cron-hooks.py` (the original hook probe).
 
 ## Working rules
 

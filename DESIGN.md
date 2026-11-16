@@ -1,7 +1,7 @@
 # no-autocompact — Design Specification
 
-**Status: v0.1.1, 2026-11-15. Live checks 2 and 3 in §7.2 (the idle veto, and keep-warm over
-two hours) passed that evening; checks 4 and 5 and the install check remain.** The design was
+**Status: v0.1.1, 2026-11-15. Every live check in §7.2 passed that evening in throwaway
+sessions; the install check remains before 1.0.0.** The design was
 approved by the owner on 2026-11-15. The background in §2 was checked against Claude Code
 2.1.325's code and docs, with live probes. Decisions D1 to D10, taken with the owner one at a
 time, are in §4; the design in §6 follows from them.
@@ -411,8 +411,9 @@ the guard reads at most 256 KB of transcript.
   5. Turn tracking after an interrupt, and the leftover-schedule path after `/clear`.
 - **After each Claude Code update** whose changelog touches compaction, scheduled tasks or
   prompt hooks: rerun 2 and 3, and re-read the strings listed in `tools/cc-context.py`.
-- **Scripts**: `tools/smoke-plugin.py` covers check 1, and `tools/live-idle-check.py` covers
-  checks 2 and 3 in one run of about 2¼ hours. Checks 4 and 5 have no script yet.
+- **Scripts**: `tools/smoke-plugin.py` covers check 1 and the stopped-schedule reminder,
+  `tools/live-idle-check.py` covers checks 2 and 3 in one run of about 2¼ hours, and
+  `tools/check-edges.py` covers checks 4 and 5 in about 10 minutes.
 - **First run of `tools/live-idle-check.py`** (2026-11-15, from 16:21 local): invalid, and
   stopped after 80 minutes. Its sessions ran on the alias `haiku`, so the control could never
   compact (§2.2). After their first turn each showed the autocompact offer (§2.5), which took
@@ -443,6 +444,22 @@ the guard reads at most 256 KB of transcript.
   by D10 in 0.1.1: upkeep now only reminds. The smoke test gained that path (an aged schedule,
   then an unrelated prompt) and passed in auto mode: Claude answered and added the one-line
   reminder, calling no scheduling tool.
+- **Done, live: checks 4 and 5** (`tools/check-edges.py`, 2026-11-15, 20:40 to 20:56 local,
+  claude-haiku-5-5).
+  - Check 4: with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=100000`, an armed session read files past
+    the threshold mid-turn and compacted (trigger `auto`, 100,001 tokens to 45,726); the guard
+    didn't veto.
+  - Check 5, interrupt: Esc while a Bash command ran left the transcript's *interrupted*
+    marker and fired neither Stop nor StopFailure, so the state kept the turn open with no
+    new good turn end, until the next turn's Stop closed it (§6.5 confirmed). Claude Code
+    refuses a bare `sleep N` command ("standalone sleep"), so the check runs a Python sleep.
+  - Check 5, `/clear`: Claude Code carried the scheduled tasks into the new session (a
+    `session_cron_carry` entry), where the plugin skipped each firing as *this session isn't
+    armed*. At the next prompt Claude answered and pointed to `/no-autocompact:off`, calling
+    no scheduling tool; that command deleted both marker tasks and the firings stopped.
+  - `~/.claude/settings.json` was unchanged. The first attempt that evening failed on two
+    script bugs (the bare `sleep`, and replies counted in the transcript from before
+    `/clear`), fixed before this run.
 
 ### 7.3 Known gaps
 
