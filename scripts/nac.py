@@ -52,6 +52,7 @@ SCHEDULE_RENEW = 6.9 * DAY
 # jitter); after that, any 30 idle minutes hold a firing.
 LOST_GAP_FIRST = 46 * MINUTE
 LOST_GAP = 32 * MINUTE
+# A stopped schedule is mentioned to the user at most this often, until it's restarted.
 LOST_ASK_EVERY = DAY
 PRUNE_AFTER = 30 * DAY
 TAIL_BYTES = 256 * 1024
@@ -253,18 +254,32 @@ def create_steps(cron, replace):
             "is away." % (first, cron, TICK_PROMPT))
 
 
-def recreate_note(cron):
+# Upkeep notes ask Claude only to tell the user which command fixes things, never to call a
+# tool inside the user's turn: a permission check can refuse such a call, as the auto-mode
+# classifier did in the live run of 2026-11-15 (DESIGN.md D10). The commands' own skills
+# pre-approve the scheduling tools.
+
+
+def stopped_note():
     return ("no-autocompact: this session's keep-warm schedule has stopped (Claude Code ends a "
-            "recurring task after seven days, and a restart can drop it). Before anything else, "
-            + create_steps(cron, replace=True)
-            + " Tell the user about it in one short line, then carry on with their message.")
+            "recurring task after seven days, and a restart can drop it). Idle compaction is "
+            "still vetoed, but the prompt cache can now expire while the user is away. Tell the "
+            "user in one short line that /no-autocompact:on restarts the schedule, then carry on "
+            "with their message. Don't call any tool for this.")
 
 
 def orphan_note():
     return ("no-autocompact: a keep-warm schedule from earlier is still firing in this session, "
-            "which isn't armed. Before anything else, call CronList and delete, with CronDelete, "
-            'every task whose prompt starts with "%s". Tell the user about it in one short '
-            "line, then carry on with their message." % MARKER)
+            "which isn't armed. The plugin skips each firing at no cost, but each one leaves a "
+            "notice. Tell the user in one short line that /no-autocompact:off removes the "
+            "schedule, then carry on with their message. Don't call any tool for this.")
+
+
+def schedule_current(st, now):
+    """Whether the session's keep-warm schedule should still be running."""
+    sched = st.get("schedule")
+    return (sched is not None and not sched.get("stopped_at")
+            and now - (sched.get("requested_at") or 0) < SCHEDULE_RENEW)
 
 
 def when(ts, now):
@@ -290,9 +305,9 @@ def cmd_arm(data, sid, now):
         st = load(data, sid) or new_state(sid)
         was_armed = bool(st["armed"])
         had_schedule = st.get("schedule") is not None
-        current = had_schedule and now - (st["schedule"].get("requested_at") or 0) < SCHEDULE_RENEW
-        # A schedule may already exist: an old one being replaced, or one left over from
-        # before /clear whose ticks this session has seen. Clear it before creating another.
+        current = schedule_current(st, now)
+        # A schedule may already exist: an old or stopped one being replaced, or one left over
+        # from before /clear whose ticks this session has seen. Clear it before creating another.
         replace = had_schedule or st.get("orphan_ticks", 0) > 0
         st["armed"] = True
         if not was_armed:
@@ -304,6 +319,7 @@ def cmd_arm(data, sid, now):
         st["orphan_cleanup_asked"] = False
         if not (was_armed and current):
             st["schedule"] = {"cron": cron_for(sid), "requested_at": now}
+            st["last_lost_ask_at"] = None  # remind again promptly if this one stops too
         save(data, sid, st)
         prune(data, now, keep=sid)
     if was_armed and current:
@@ -351,9 +367,12 @@ def cmd_status(data, sid, now):
             lines.append("Off%s." % (" since " + when(st["disarmed_at"], now)
                                      if st.get("disarmed_at") else ""))
         sched = st.get("schedule")
-        if sched:
+        if sched and sched.get("stopped_at"):
+            lines.append("Keep-warm schedule: stopped (noticed %s); /no-autocompact:on restarts "
+                         "it. Idle compaction is still vetoed." % when(sched["stopped_at"], now))
+        elif sched:
             lines.append("Keep-warm schedule: %s, set up %s; Claude Code ends it after seven "
-                         "days, and the plugin then asks for a new one."
+                         "days, and the plugin then reminds you to restart it."
                          % (sched["cron"], when(sched.get("requested_at"), now)))
         t = st["ticks"]
         lines.append("Keep-warm ticks: %d passed (last %s), %d skipped (last %s%s)."
@@ -384,6 +403,10 @@ def hook_prompt(data, inp, now):
             st = load(data, sid) or new_state(sid)
             st["turn_open"] = False  # a scheduled prompt fires only between turns
             st["last_tick_seen_at"] = now
+            sched = st.get("schedule")
+            if (st["armed"] and sched and sched.get("stopped_at")
+                    and now - (sched.get("requested_at") or 0) < SCHEDULE_RENEW):
+                del sched["stopped_at"]  # a tick came after all, so the schedule still runs
             reason = tick_skip_reason(st, now, newest_reply)
             if reason is None:
                 st["ticks"]["passed"] += 1
@@ -410,14 +433,14 @@ def hook_prompt(data, inp, now):
         notes = []
         if st["armed"]:
             sched = st.get("schedule")
-            stale = sched is None or now - (sched.get("requested_at") or 0) > SCHEDULE_RENEW
-            lost = (not stale and schedule_lost(st, now)
-                    and now - (st.get("last_lost_ask_at") or 0) > LOST_ASK_EVERY)
-            if lost:
+            if sched is not None and not sched.get("stopped_at") and (
+                    now - (sched.get("requested_at") or 0) >= SCHEDULE_RENEW
+                    or schedule_lost(st, now)):
+                sched["stopped_at"] = now
+            stopped = sched is None or bool(sched.get("stopped_at"))
+            if stopped and now - (st.get("last_lost_ask_at") or 0) > LOST_ASK_EVERY:
                 st["last_lost_ask_at"] = now
-            if stale or lost:
-                st["schedule"] = {"cron": cron_for(sid), "requested_at": now}
-                notes.append(recreate_note(st["schedule"]["cron"]))
+                notes.append(stopped_note())
         elif st.get("orphan_ticks") and not st.get("orphan_cleanup_asked"):
             st["orphan_cleanup_asked"] = True
             notes.append(orphan_note())

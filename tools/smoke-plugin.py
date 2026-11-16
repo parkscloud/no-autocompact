@@ -8,6 +8,8 @@ DESIGN.md §7.1 stage 3, with check 1 of §7.2. In a fresh directory under build
   2. schedules an extra once-a-minute task carrying the tick marker, and checks that the
      plugin's hook skips its firing ("you're active") without a reply from Claude;
   3. runs /compact by hand and checks that it compacts (the guard never touches manual runs);
+     then ages the schedule past seven days and checks that the next prompt only reminds the
+     user to run /no-autocompact:on, with no scheduling tool called in that turn (D10);
   4. runs /no-autocompact:status, then /no-autocompact:off, and checks the disarm and the
      CronDelete calls.
 It compares ~/.claude/settings.json before and after, and writes result.json beside the
@@ -102,6 +104,31 @@ def main():
         res["manual_compact_trigger"] = boundary and (boundary[0].get("compactMetadata") or {}).get("trigger")
         time.sleep(5)
 
+        # 3b. A stopped schedule is mentioned to the user, not rebuilt mid-turn (D10). Age the
+        # schedule past Claude Code's seven days, then send an unrelated prompt.
+        path, _ = state_of(sid)
+        data = str(path.parent.parent)
+        with nac.locked(data, sid):
+            st = nac.load(data, sid)
+            st["schedule"]["requested_at"] -= 8 * 86400
+            nac.save(data, sid, st)
+        n_before = len(rows())
+        s.type_line("What is 2 + 2? Reply with just the number.")
+        answer = ps.wait_for(lambda: [r for r in rows()[n_before:] if r.get("type") == "assistant"
+                                      and "text" in json.dumps(r.get("message") or {})], 120)
+        time.sleep(10)
+        later = rows()[n_before:]
+        res["stopped_note_added"] = any(r.get("type") == "attachment" and "/no-autocompact:on" in json.dumps(r)
+                                        for r in later)
+        res["stopped_tools_called"] = [u[1] for u in ps.tool_uses(later) if u[1].startswith("Cron")]
+        res["stopped_reply"] = " ".join(b.get("text", "") for r in later if r.get("type") == "assistant"
+                                        for b in ((r.get("message") or {}).get("content") or [])
+                                        if isinstance(b, dict) and b.get("type") == "text")[:300]
+        res["stopped_reminded"] = bool(answer) and res["stopped_note_added"] and \
+            not res["stopped_tools_called"] and "no-autocompact:on" in res["stopped_reply"]
+        res["stopped_marked"] = bool((state_of(sid)[1] or {}).get("schedule", {}).get("stopped_at"))
+        time.sleep(5)
+
         # 4. Status, then off.
         n_before = len(rows())
         s.type_line("/no-autocompact:status")
@@ -123,7 +150,8 @@ def main():
         (probe / "result.json").write_text(json.dumps(res, indent=2))
         print(json.dumps(res, indent=2))
     checks = ["arm_cron_create_exact", "armed", "stop_hook_recorded_turn_end", "tick_skipped",
-              "manual_compact_ran", "status_answered", "disarmed", "settings_json_unchanged"]
+              "manual_compact_ran", "stopped_reminded", "stopped_marked", "status_answered",
+              "disarmed", "settings_json_unchanged"]
     failed = [c for c in checks if not res.get(c)] + (["claude_replied_after_first_tick"]
                                                       if res.get("claude_replied_after_first_tick") else [])
     print("FAILED: " + ", ".join(failed) if failed else "ALL CHECKS PASSED")

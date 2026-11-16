@@ -1,11 +1,10 @@
 # no-autocompact — Design Specification
 
-**Status: v0.1.0 released 2026-11-15. Live checks 2 and 3 in §7.2 (the idle veto, and
-keep-warm over two hours) passed that evening; checks 4 and 5 and the install check remain,
-and one question is open (§5).** The design was approved by the owner on 2026-11-15. The
-background in §2 was checked against Claude Code 2.1.325's code and docs, with live probes.
-Decisions D1 to D9, taken with the owner one at a time, are in §4; the design in §6 follows
-from them.
+**Status: v0.1.1, 2026-11-15. Live checks 2 and 3 in §7.2 (the idle veto, and keep-warm over
+two hours) passed that evening; checks 4 and 5 and the install check remain.** The design was
+approved by the owner on 2026-11-15. The background in §2 was checked against Claude Code
+2.1.325's code and docs, with live probes. Decisions D1 to D10, taken with the owner one at a
+time, are in §4; the design in §6 follows from them.
 
 ## 1. Summary
 
@@ -240,16 +239,11 @@ once answered.
 | D7 | Packaging | **A Claude Code plugin with its own marketplace**, as okf-author does: `/plugin marketplace add parkscloud/no-autocompact`, then `/plugin install no-autocompact@no-autocompact`. The skills and hooks ship, update (auto-update is opt-in) and uninstall together, and nothing edits the user's `settings.json`. Commands: `/no-autocompact:on`, `/no-autocompact:off`, `/no-autocompact:status`, and plain words for arming. | One install carries every part, and a plugin is Claude Code's only native way to update a skill. The cost is the namespaced command form (amends D1). Decided 2026-11-15. |
 | D8 | License | **MIT**, as okf-author uses; `LICENSE` holds the standard text. | Short and the most common license for a small developer tool; the repository holds only the owner's own code. Decided 2026-11-15. |
 | D9 | When it's public | **Private until 1.0.0.** The repository, public since v0.1.0, went private on the evening of 2026-11-15 and goes public again only once every check in §7.2 passes and 1.0.0 is released. Tags and the v0.1.0 release stay. | The owner doesn't want it public unless it works, and the idle veto and keep-warm weren't yet proven live. Nobody had starred, forked, viewed or cloned it. Amends D4's timing. Decided 2026-11-15. |
+| D10 | How upkeep works | **Remind, don't act.** When an armed session's keep-warm schedule has stopped (seven days old, or no tick when one was due), the hook marks it stopped and has Claude tell the user, in one line and at most once a day, that `/no-autocompact:on` restarts it. Claude calls no tool in that turn; the guard keeps vetoing meanwhile. The same holds for a leftover schedule firing in a session that isn't armed: Claude points to `/no-autocompact:off`, once. | In the live run of 2026-11-15 the auto-mode classifier refused the `CronCreate` the hook had asked for inside an unrelated turn, and the default mode would have shown a permission prompt there instead. The commands' skills pre-approve the scheduling tools, so running one always works. A stopped schedule costs only the warm cache, and rarely: weekly at most. Owner's choice for stopped schedules; the leftover case follows the same rule. Decided 2026-11-15. |
 
 ## 5. Open decisions
 
-- **How a stopped keep-warm schedule comes back** (found in the live run of 2026-11-15,
-  §7.2). Today the hook asks Claude, during the user's next turn, to delete leftover marker
-  tasks and create a new schedule (§6.4). In auto mode the classifier can refuse that
-  `CronCreate`, and in the default mode it would raise a permission prompt in the middle of an
-  unrelated request.
-
-D1 to D9 settle every other question raised so far. The owner signed off on the design in §6
+None. D1 to D10 settle every question raised so far. The owner signed off on the design in §6
 on 2026-11-15.
 
 ## 6. Design
@@ -308,13 +302,15 @@ subagents' reports and cross-session messages.
   *(this session isn't armed)*. A tick never meets a running turn, since Claude Code fires
   scheduled prompts only between turns, so the hook also closes any turn an interrupt left
   open.
-- Any other prompt opens a turn. In an armed session whose schedule is more than about 6.9
-  days old, the hook also adds `additionalContext` asking Claude to recreate the schedule with
-  the exact call, one tool call a week. It asks the same, at most once a day, when the session
-  has just sat idle long enough for a tick without one arriving: 32 minutes, or 46 before the
-  schedule's first tick, which can take up to 45 minutes (30-minute spacing plus up to 15 of
-  jitter). In a session that isn't armed but has seen a skipped tick (a schedule left over
-  after `/clear`, say), it asks Claude to delete that schedule.
+- Any other prompt opens a turn. The hook also marks an armed session's schedule **stopped**
+  when it is about 6.9 days old, or when the session has just sat idle long enough for a tick
+  without one arriving: 32 minutes, or 46 before the schedule's first tick, which can take up
+  to 45 minutes (30-minute spacing plus up to 15 of jitter). While it's stopped, the hook adds
+  `additionalContext`, at most once a day, asking Claude to tell the user in one line that
+  `/no-autocompact:on` restarts it, and to call no tool for it (D10). Re-arming deletes any
+  leftover marker tasks and creates a fresh schedule; a tick that arrives after all clears the
+  mark. In a session that isn't armed but has seen a skipped tick (a schedule left over after
+  `/clear`, say), Claude points the user to `/no-autocompact:off` once.
 
 Why 20 and 53 minutes: ticks come 30 minutes apart, so the window from 20 to 50 minutes after
 a turn ends always holds exactly one. That tick passes, the cache's hour starts over, and the
@@ -356,11 +352,12 @@ reports the trigger `manual` and never reaches the guard.
 ### 6.8 Edge cases
 
 - **`/clear`** starts a new session ID, which isn't armed. A schedule left running is skipped
-  tick by tick and deleted at the next prompt (6.4).
+  tick by tick, and at the next prompt Claude points to `/no-autocompact:off`, which deletes it
+  (6.4).
 - **`--resume`** keeps the session ID, so the arming carries over. The scheduled-tasks docs
   say Claude Code restores tasks on resume, while `CronCreate`'s own description in 2.1.325
-  says jobs end with the process; either way, the lost-schedule check in 6.4 asks for a new
-  one when no tick arrives.
+  says jobs end with the process; either way, the check in 6.4 marks the schedule stopped
+  when no tick arrives, and Claude mentions `/no-autocompact:on`.
 - **The machine sleeps**: the ticks and the idle timer both stop, and the timer gives up once
   it's late. After waking, a tick finds the cache cold and is skipped; the first message back
   re-reads the conversation once.
@@ -442,7 +439,10 @@ the guard reads at most 256 KB of transcript.
   since its schedule was deleted, so the hook asked Claude to recreate the schedule (§6.4).
   The auto-mode classifier denied the `CronCreate` as an unwanted action (that prompt had said
   "without using any tool"). Claude answered the question, then told the user that
-  `/no-autocompact:on` brings the schedule back. The guard stayed on. Open in §5.
+  `/no-autocompact:on` brings the schedule back. The guard stayed on. **RESOLVED 2026-11-15**
+  by D10 in 0.1.1: upkeep now only reminds. The smoke test gained that path (an aged schedule,
+  then an unrelated prompt) and passed in auto mode: Claude answered and added the one-line
+  reminder, calling no scheduling tool.
 
 ### 7.3 Known gaps
 
@@ -470,6 +470,6 @@ After that, each user-facing change gets a semantic version bump, a `CHANGELOG.m
 an annotated git tag. The version lives in `.claude-plugin/plugin.json`, in its entry in
 `.claude-plugin/marketplace.json` and in the README's status line; all three move together
 with the tag. v0.1.0 was released on 2026-11-15, and the repository went private that evening
-(D9). Until it's public again, the install check runs from a local marketplace (this
+(D9); v0.1.1 followed the same evening (D10). Until it's public again, the install check runs from a local marketplace (this
 repository's folder), which reads the same manifests; once it's public, the install from
 GitHub is checked once more before 1.0.0.

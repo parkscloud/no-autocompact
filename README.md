@@ -3,10 +3,10 @@
 A Claude Code plugin that keeps the session you choose from being compacted while you're
 away, using as little model time as possible.
 
-**Status: v0.1.0, an early release (November 2026).** It passes its unit tests and a smoke
-test in a live Claude Code 2.1.325 session. The longer live checks (an hour-long idle veto,
-hours of keep-warm) are listed in [DESIGN.md §7.2](DESIGN.md#72-checks); 1.0.0 waits for
-them.
+**Status: v0.1.1, an early release (November 2026).** In live Claude Code 2.1.325 sessions
+the guard vetoed idle compaction and the session kept its context, and keep-warm held the
+cache for two hours with no compaction. It also passes its unit tests and a smoke test. The
+checks still to run before 1.0.0 are listed in [DESIGN.md §7.2](DESIGN.md#72-checks).
 
 ## Why this exists
 
@@ -89,9 +89,9 @@ no keep-warm schedule is left behind.
   minutes while you work in an armed session).
 - **Turn tracking.** `Stop` and `StopFailure` hooks record when turns end, which tells the
   guard an idle run from one inside a turn.
-- **Upkeep.** Claude Code ends a recurring schedule after seven days; at your next message
-  after that, the plugin asks Claude to set up a new one. The same happens if the schedule
-  stops for another reason, such as a restart.
+- **Upkeep.** Claude Code ends a recurring schedule after seven days. At your next message
+  after that, or after the schedule stops for another reason such as a restart, Claude tells
+  you in one line that `/no-autocompact:on` restarts it. The guard keeps vetoing meanwhile.
 
 Sessions that were never armed pay only for a quick shell check on each prompt, turn end and
 compaction; nothing else runs. [DESIGN.md](DESIGN.md) has the full specification, the

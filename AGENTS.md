@@ -9,12 +9,12 @@ later) and Codex alike; don't add a `CLAUDE.md` beside it, or Claude Code will i
 until 1.0.0 by the owner's decision D9) that keeps a chosen session from being compacted while
 its user is away, with the least model use. Skills arm, disarm and report; a PreCompact hook vetoes idle compaction; a
 UserPromptSubmit hook, with Stop and StopFailure for turn tracking, lets a 30-minute keep-warm
-schedule through only during absences. **Status: v0.1.0, released 2026-11-15; live checks 2
-and 3 in `DESIGN.md` §7.2 passed that evening, while checks 4 and 5, the install check and
-one open question (§5) remain before 1.0.0.** The README is the public face and
+schedule through only during absences. **Status: v0.1.1, 2026-11-15; live checks 2 and 3 in
+`DESIGN.md` §7.2 passed that evening, while checks 4 and 5 and the install check remain
+before 1.0.0.** The README is the public face and
 explains that the project exists because of the idle compaction Claude Code 2.1.299 added.
 
-## Next steps (as of 2026-11-15, after v0.1.0)
+## Next steps (as of 2026-11-15, after v0.1.1)
 
 1. **Done: `DESIGN.md` §7.2 checks 2 and 3 passed** in the second live run, 17:49 to 19:59
    local on 2026-11-15 (`build/live-idle-20261115T174942/result.json`, gitignored): the
@@ -22,8 +22,8 @@ explains that the project exists because of the idle compaction Claude Code 2.1.
    (16:21) was invalid, for the two reasons in §7.2. When rerunning, remember that if control B
    shows no compaction the run proves nothing (the machine slept, or idle compaction gave up
    for a reason of its own, `DESIGN.md` §2.2).
-   **Open first: the question in `DESIGN.md` §5** (how a stopped keep-warm schedule comes back;
-   the run found the auto-mode classifier can refuse the hook-requested `CronCreate`).
+   The run also found the auto-mode classifier refusing a hook-requested `CronCreate`; D10
+   (0.1.1) made upkeep a one-line reminder instead, and the smoke test now covers it.
 2. **If it passes**: with the owner's OK, install at user scope. While the repository is
    private, that means a local marketplace (`/plugin marketplace add <this repository's
    folder>`, then `/plugin install no-autocompact@no-autocompact`); confirm

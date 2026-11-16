@@ -223,18 +223,53 @@ class PromptTests(Base):
         self.assertIsNone(self.typed(T0))
         self.assertIsNone(self.state())
 
-    def test_asks_for_a_new_schedule_after_seven_days(self):
+    def assertReminder(self, out, command):
+        """Upkeep only reminds the user (D10): it names the command and asks for no tool call."""
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn(command, ctx)
+        self.assertIn("Don't call any tool", ctx)
+        for tool in ("CronCreate", "CronList", "CronDelete"):
+            self.assertNotIn(tool, ctx)
+
+    def test_reminds_the_user_after_seven_days(self):
         self.arm_and_settle()
         out = self.typed(T0 + 7 * 86400)
-        ctx = out["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("CronCreate", ctx)
-        self.assertIn("CronList", ctx)
-        self.assertIsNone(self.typed(T0 + 7 * 86400 + MIN))  # asked once
+        self.assertReminder(out, "/no-autocompact:on")
+        self.assertTrue(self.state()["schedule"]["stopped_at"])
+        self.assertIsNone(self.typed(T0 + 7 * 86400 + MIN))  # once, not on every prompt
 
     def test_notices_a_schedule_that_never_ticked(self):
         self.arm_and_settle()
         out = self.typed(T0 + 50 * MIN)  # idle 50 minutes, no tick seen
-        self.assertIn("CronCreate", out["hookSpecificOutput"]["additionalContext"])
+        self.assertReminder(out, "/no-autocompact:on")
+
+    def test_arming_again_restarts_a_stopped_schedule(self):
+        self.arm_and_settle()
+        self.typed(T0 + 50 * MIN)  # noticed as stopped
+        self.stop(T0 + 51 * MIN)
+        out = nac.cmd_arm(self.data, SID, T0 + 52 * MIN)
+        self.assertIn("CronList", out)  # leftovers first, in case it still runs
+        self.assertIn("CronCreate", out)
+        st = self.state()
+        self.assertNotIn("stopped_at", st["schedule"])
+        self.assertEqual(st["schedule"]["requested_at"], T0 + 52 * MIN)
+        self.stop(T0 + 53 * MIN)
+        self.assertIsNone(self.typed(T0 + 54 * MIN))  # nothing more to say
+
+    def test_a_tick_after_all_means_the_schedule_still_runs(self):
+        self.arm_and_settle()
+        self.typed(T0 + 50 * MIN)  # no tick for 50 minutes: noticed as stopped
+        self.stop(T0 + 51 * MIN)
+        self.tick(T0 + 72 * MIN)  # but here one is
+        self.assertNotIn("stopped_at", self.state()["schedule"])
+        self.assertIn("already on", nac.cmd_arm(self.data, SID, T0 + 80 * MIN))
+
+    def test_status_reports_a_stopped_schedule(self):
+        self.arm_and_settle()
+        self.typed(T0 + 7 * 86400)
+        out = nac.cmd_status(self.data, SID, T0 + 7 * 86400 + MIN)
+        self.assertIn("stopped", out)
+        self.assertIn("/no-autocompact:on", out)
 
     def test_waits_for_the_first_tick_before_calling_it_lost(self):
         self.arm_and_settle()
@@ -249,7 +284,7 @@ class PromptTests(Base):
         self.tick(T0 + 70 * MIN)  # passes
         self.assertIsNone(self.typed(T0 + 75 * MIN))
 
-    def test_asks_about_a_lost_schedule_at_most_once_a_day(self):
+    def test_reminds_about_a_lost_schedule_at_most_once_a_day(self):
         self.arm_and_settle()
         self.assertIsNotNone(self.typed(T0 + 50 * MIN))
         self.stop(T0 + 51 * MIN)
@@ -257,11 +292,16 @@ class PromptTests(Base):
         self.stop(T0 + 121 * MIN)
         self.assertIsNotNone(self.typed(T0 + 26 * 3600))
 
-    def test_asks_once_to_delete_a_leftover_schedule(self):
+    def test_mentions_a_leftover_schedule_once(self):
         self.tick(T0)
         out = self.typed(T0 + MIN)
-        self.assertIn("CronDelete", out["hookSpecificOutput"]["additionalContext"])
+        self.assertReminder(out, "/no-autocompact:off")
         self.assertIsNone(self.typed(T0 + 2 * MIN))
+
+    def test_off_removes_a_leftover_schedule(self):
+        self.tick(T0)  # leftover firing in a session that was never armed
+        out = nac.cmd_disarm(self.data, SID, T0 + MIN)
+        self.assertIn("CronDelete", out)
 
 
 class TurnEndTests(Base):
