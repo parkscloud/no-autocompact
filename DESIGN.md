@@ -1,9 +1,11 @@
 # no-autocompact — Design Specification
 
-**Status: v0.1.0 released 2026-11-15; the long live checks in §7.2 are still to run.** The
-design was approved by the owner on 2026-11-15. The background in §2 was checked against
-Claude Code 2.1.325's code and docs, with live probes. Decisions D1 to D8, taken with the
-owner one at a time, are in §4; the design in §6 follows from them.
+**Status: v0.1.0 released 2026-11-15. Live checks 2 and 3 in §7.2 (the idle veto, and
+keep-warm over two hours) passed that evening; checks 4 and 5 and the install check remain,
+and one question is open (§5).** The design was approved by the owner on 2026-11-15. The
+background in §2 was checked against Claude Code 2.1.325's code and docs, with live probes.
+Decisions D1 to D9, taken with the owner one at a time, are in §4; the design in §6 follows
+from them.
 
 ## 1. Summary
 
@@ -241,7 +243,13 @@ once answered.
 
 ## 5. Open decisions
 
-None. D1 to D9 settle every question raised so far. The owner signed off on the design in §6
+- **How a stopped keep-warm schedule comes back** (found in the live run of 2026-11-15,
+  §7.2). Today the hook asks Claude, during the user's next turn, to delete leftover marker
+  tasks and create a new schedule (§6.4). In auto mode the classifier can refuse that
+  `CronCreate`, and in the default mode it would raise a permission prompt in the middle of an
+  unrelated request.
+
+D1 to D9 settle every other question raised so far. The owner signed off on the design in §6
 on 2026-11-15.
 
 ## 6. Design
@@ -419,6 +427,22 @@ the guard reads at most 256 KB of transcript.
   stopping when a prompt doesn't reach the transcript or arming leaves no state. The smoke
   test passed with those changes, and a second run started at 17:49 local
   (`build/live-idle-20261115T174942/`).
+- **Done, live: checks 2 and 3** (that second run, 17:49 to 19:59 local, claude-haiku-5-5,
+  about 237K tokens in each session; all eight of the script's checks passed).
+  - Control B compacted while idle at 18:44, 54 minutes after its last request.
+  - In A, armed with its keep-warm task deleted, the guard vetoed the idle run at 18:46. A
+    gained no `compact_boundary`, and 66 minutes after its last request it named file 5's
+    code word from context. That first request back re-wrote 209K tokens to the cold cache:
+    the guard-alone cost of §3.
+  - In C, armed with keep-warm, ticks passed at 18:24, 18:54, 19:24 and 19:54. Each read about
+    239K tokens from the cache and wrote 23, so the cache stayed warm. Nothing compacted, and C
+    named file 3's code word.
+  - `~/.claude/settings.json` was unchanged.
+- **Found in that run: the upkeep path can be refused.** A's question was its first prompt
+  since its schedule was deleted, so the hook asked Claude to recreate the schedule (§6.4).
+  The auto-mode classifier denied the `CronCreate` as an unwanted action (that prompt had said
+  "without using any tool"). Claude answered the question, then told the user that
+  `/no-autocompact:on` brings the schedule back. The guard stayed on. Open in §5.
 
 ### 7.3 Known gaps
 
